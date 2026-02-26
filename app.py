@@ -13,35 +13,41 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta, datetime
 
+# -----------------------------
 # Load environment variables
+# -----------------------------
 load_dotenv()
 
 app = Flask(__name__)
 
-# -----------------------------
-# SAFE HOME ROUTE (CI/CD FIX)
-# -----------------------------
+# =========================================================
+# HEALTH ROUTE (DO NOT CHANGE — required for CI/CD)
+# =========================================================
 @app.route('/')
-def home():
-    """
-    Health check route for CI/CD.
-    Returns JSON so tests always pass.
-    """
+def health():
     return jsonify({"message": "JWT Auth system running"}), 200
 
 
-# -----------------------------
+# =========================================================
+# UI ROUTE (for your screenshot/demo)
+# =========================================================
+@app.route('/ui')
+def jwt_ui():
+    return render_template('index.html')
+
+
+# =========================================================
 # JWT Configuration
-# -----------------------------
+# =========================================================
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 
 jwt = JWTManager(app)
 
-# -----------------------------
-# MongoDB Connection (SAFE)
-# -----------------------------
+# =========================================================
+# MongoDB Connection (safe for CI environment)
+# =========================================================
 mongo_uri = os.getenv('MONGO_URI')
 
 if mongo_uri:
@@ -50,14 +56,13 @@ if mongo_uri:
     users_collection = db['users']
     revoked_tokens_collection = db['revoked_tokens']
 else:
-    # fallback for CI so tests don't crash
     users_collection = None
     revoked_tokens_collection = None
 
 
-# -----------------------------
-# AUTH ROUTES
-# -----------------------------
+# =========================================================
+# SIGNUP
+# =========================================================
 @app.route('/api/signup', methods=['POST'])
 def signup():
     try:
@@ -91,6 +96,9 @@ def signup():
         return jsonify({'error': str(e)}), 500
 
 
+# =========================================================
+# LOGIN
+# =========================================================
 @app.route('/api/login', methods=['POST'])
 def login():
     try:
@@ -122,6 +130,9 @@ def login():
         return jsonify({'error': str(e)}), 500
 
 
+# =========================================================
+# REFRESH TOKEN
+# =========================================================
 @app.route('/api/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
@@ -130,6 +141,9 @@ def refresh():
     return jsonify({'access_token': access_token}), 200
 
 
+# =========================================================
+# PROTECTED ROUTE
+# =========================================================
 @app.route('/api/protected', methods=['GET'])
 @jwt_required()
 def protected():
@@ -141,6 +155,9 @@ def protected():
     }), 200
 
 
+# =========================================================
+# LOGOUT
+# =========================================================
 @app.route('/api/logout', methods=['POST'])
 @jwt_required()
 def logout():
@@ -152,9 +169,9 @@ def logout():
     return jsonify({'message': 'Successfully logged out'}), 200
 
 
-# -----------------------------
+# =========================================================
 # JWT CALLBACKS
-# -----------------------------
+# =========================================================
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload):
     if revoked_tokens_collection is None:
@@ -179,8 +196,8 @@ def missing_token_callback(error):
     return jsonify({'error': 'Authorization header required'}), 401
 
 
-# -----------------------------
+# =========================================================
 # RUN
-# -----------------------------
+# =========================================================
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
